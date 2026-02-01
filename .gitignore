@@ -20,4 +20,6 @@ __pycache__/
 .claude/
 uv.lock
 
+tests/
+docs/
 *.html

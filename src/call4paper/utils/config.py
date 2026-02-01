@@ -158,3 +158,161 @@ class Config:
         except Exception:
             # Silently fail - this is a fallback mechanism
             return None
+
+    @classmethod
+    async def search_journals_by_keyword(
+        cls, 
+        keyword: str, 
+        max_results: int = 20,
+        min_works: int = 500,
+        mode: str = "topic"
+    ) -> list[dict]:
+        """Search for journals by keyword using OpenAlex API.
+        
+        This enables cross-journal CFP discovery by topic/keyword.
+        
+        Args:
+            keyword: Search keyword or phrase (e.g., "machine learning", "renewable energy")
+            max_results: Maximum number of journals to return (default: 20)
+            min_works: Minimum number of published works to filter quality journals (default: 500)
+            mode: "topic" (search by research topic, default) or "name" (search journal names)
+            
+        Returns:
+            List of dictionaries containing journal information:
+            - journal_name: Display name of the journal
+            - publisher: Normalized publisher name
+            - publisher_raw: Original publisher name from OpenAlex
+            - works_count: Number of published works
+            - cited_by_count: Total citation count
+            - citation_rate: Citations per paper (quality indicator, similar to IF)
+            - homepage_url: Journal homepage URL (if available)
+            - issn_l: Linking ISSN
+            - topic_papers_count: (topic mode only) Papers on this specific topic
+        """
+        # Known non-journal sources to exclude
+        EXCLUDE_SOURCES = {
+            'arxiv', 'zenodo', 'ssrn', 'biorxiv', 'medrxiv', 'preprints',
+            'research square', 'figshare', 'dryad', 'hal', 'pubmed central'
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                if mode == "topic":
+                    # Search papers by topic, group by journal
+                    url = f"{cls.OPENALEX_API_BASE}/works"
+                    params = {
+                        "search": keyword,
+                        "group_by": "primary_location.source.id",
+                        "per_page": max_results * 3  # Fetch more to filter
+                    }
+                    
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    results = []
+                    for group in data.get("group_by", []):
+                        source_id = group.get('key')
+                        topic_papers = group.get('count', 0)
+                        
+                        if not source_id or not source_id.startswith('https://openalex.org/S'):
+                            continue
+                        
+                        # Fetch journal details
+                        source_api_id = source_id.split('/')[-1]
+                        api_url = f"{cls.OPENALEX_API_BASE}/sources/{source_api_id}"
+                        
+                        try:
+                            journal_resp = await client.get(api_url)
+                            journal_resp.raise_for_status()
+                            journal_data = journal_resp.json()
+                            
+                            # Must be a journal (not repository, conference, etc.)
+                            if journal_data.get('type') != 'journal':
+                                continue
+                            
+                            journal_name = journal_data.get('display_name', '')
+                            
+                            # Exclude preprint servers and repositories
+                            if any(excl in journal_name.lower() for excl in EXCLUDE_SOURCES):
+                                continue
+                            
+                            works_count = journal_data.get('works_count', 0)
+                            cited_by_count = journal_data.get('cited_by_count', 0)
+                            
+                            # Filter by minimum works
+                            if works_count < min_works:
+                                continue
+                            
+                            # Calculate citation rate (proxy for impact factor)
+                            citation_rate = cited_by_count / works_count if works_count > 0 else 0
+                            
+                            publisher_raw = journal_data.get('host_organization_name') or 'Unknown'
+                            
+                            results.append({
+                                "journal_name": journal_name,
+                                "publisher": cls.normalize_publisher_name(publisher_raw),
+                                "publisher_raw": publisher_raw,
+                                "works_count": works_count,
+                                "cited_by_count": cited_by_count,
+                                "citation_rate": round(citation_rate, 2),
+                                "homepage_url": journal_data.get('homepage_url'),
+                                "issn_l": journal_data.get('issn_l'),
+                                "topic_papers_count": topic_papers,
+                            })
+                            
+                        except Exception:
+                            continue
+                    
+                    # Sort by citation rate (impact), then by topic relevance
+                    results.sort(key=lambda x: (x.get('citation_rate', 0), x.get('topic_papers_count', 0)), reverse=True)
+                    
+                else:  # mode == "name"
+                    # Search journals by name
+                    url = f"{cls.OPENALEX_API_BASE}/sources"
+                    params = {
+                        "search": keyword,
+                        "per_page": max_results * 2,
+                        "filter": "type:journal",
+                    }
+                    
+                    response = await client.get(url, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    results = []
+                    for result in data.get("results", []):
+                        journal_name = result.get("display_name", "")
+                        
+                        # Exclude preprint servers
+                        if any(excl in journal_name.lower() for excl in EXCLUDE_SOURCES):
+                            continue
+                        
+                        works_count = result.get("works_count", 0)
+                        cited_by_count = result.get("cited_by_count", 0)
+                        
+                        if works_count < min_works:
+                            continue
+                        
+                        citation_rate = cited_by_count / works_count if works_count > 0 else 0
+                        publisher_raw = result.get("host_organization_name") or "Unknown"
+                        
+                        results.append({
+                            "journal_name": journal_name,
+                            "publisher": cls.normalize_publisher_name(publisher_raw),
+                            "publisher_raw": publisher_raw,
+                            "works_count": works_count,
+                            "cited_by_count": cited_by_count,
+                            "citation_rate": round(citation_rate, 2),
+                            "homepage_url": result.get("homepage_url"),
+                            "issn_l": result.get("issn_l"),
+                        })
+                    
+                    # Sort by citation rate (quality indicator)
+                    results.sort(key=lambda x: x["citation_rate"], reverse=True)
+                
+                # Return top results
+                return results[:max_results]
+                
+        except Exception as e:
+            return []

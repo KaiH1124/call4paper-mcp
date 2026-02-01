@@ -4,15 +4,17 @@ An MCP (Model Context Protocol) server for retrieving academic journal Call for 
 
 ## Features
 
-- Search for Special Issue Call for Papers by journal name
-- Support for major academic publishers:
+- 🔍 **Cross-journal keyword search**: Find journals by research topic using OpenAlex API
+- 📰 Search for Special Issue Call for Papers by journal name
+- 🏢 Support for major academic publishers:
   - **Springer Nature** ✅ (fully working)
   - **Elsevier/ScienceDirect** ✅ (fully working - unified browse page with JSON extraction)
   - IEEE (planned)
   - Wiley (planned)
-- Automatic caching with 24-hour TTL
-- Fallback generic parser for unsupported publishers
-- Smart JSON extraction from dynamically loaded pages
+- 💾 Automatic caching with 24-hour TTL
+- 🔄 Fallback generic parser for unsupported publishers
+- ⚡ Smart JSON extraction from dynamically loaded pages
+- 🌐 OpenAlex integration for journal discovery and publisher identification
 
 ## Installation
 
@@ -45,8 +47,39 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 
 ### Available Tools
 
+#### `search_journals_by_keyword` 🆕
+Search for academic journals by keyword or research topic (cross-journal discovery).
+
+**NEW: Topic-based search with quality ranking!**
+
+```
+Input:
+- keyword: Research topic or keyword (e.g., "machine learning", "renewable energy")
+- max_results: Maximum number of journals to return (default: 15)
+- min_works: Minimum published papers to filter quality journals (default: 500)
+- mode: "topic" (search by research topic, default) or "name" (search journal names)
+
+Output: JSON with journal list sorted by citation rate (quality indicator):
+  - citation_rate: Citations per paper (similar to Impact Factor)
+  - topic_papers_count: Number of papers on this specific topic
+  - Excludes preprint servers (arXiv, bioRxiv, etc.)
+  - Only includes peer-reviewed journals
+```
+
+**Workflow**: Use this to find top-tier journals by topic, then use `search_cfp` to get CFPs.
+
+**Example**:
+1. `search_journals_by_keyword("deep learning", mode="topic")` → Get top journals ranked by quality
+2. Results show "Nature Communications" (citation_rate: 83.8) at the top
+3. `search_cfp("Nature Communications", count=5)` → Get CFPs for that journal
+
+**Quality Metrics**:
+- **Citation Rate** = Total Citations ÷ Total Papers (proxy for Impact Factor)
+- Filters out non-journals (arXiv, Zenodo, conference proceedings)
+- Minimum 500 papers to ensure established journals
+
 #### `search_cfp`
-Search for Call for Papers for a journal.
+Search for Call for Papers for a specific journal.
 
 ```
 Input:
@@ -65,6 +98,16 @@ Input:
 - journal_name: Optional journal name
 
 Output: JSON with detailed CFP info including guest editors, topics, submission URL
+```
+
+#### `get_publisher`
+Identify the publisher of a journal using OpenAlex API.
+
+```
+Input:
+- journal_name: Name of the journal
+
+Output: JSON with publisher info, ISSN, citation statistics
 ```
 
 #### `list_publishers`
@@ -184,12 +227,58 @@ python test_filter.py         # Automated filtering test
 
 ## Example
 
+### Cross-Journal Keyword Search (Topic-based Discovery)
+
+```python
+import asyncio
+from call4paper.utils.config import Config
+from call4paper.tools.search import search_journal_cfp
+
+async def find_top_journals_by_topic():
+    # Step 1: Find TOP journals by research topic (sorted by quality)
+    journals = await Config.search_journals_by_keyword(
+        keyword="renewable energy",
+        max_results=10,
+        min_works=1000,  # Quality filter
+        mode="topic"  # Search by topic, not just journal name
+    )
+    
+    print(f"Found {len(journals)} top-tier journals\n")
+    
+    # Results are sorted by citation_rate (similar to Impact Factor)
+    for journal in journals[:3]:
+        print(f"• {journal['journal_name']}")
+        print(f"  Citation Rate: {journal['citation_rate']:.1f}")
+        print(f"  Papers on this topic: {journal['topic_papers_count']:,}")
+        print(f"  Publisher: {journal['publisher_raw']}\n")
+    
+    # Step 2: Search CFPs for top journals
+    for journal in journals[:3]:
+        journal_name = journal['journal_name']
+        print(f"\nSearching CFPs for: {journal_name}")
+        
+        cfp_list = await search_journal_cfp(journal_name, count=5)
+        for cfp in cfp_list.items:
+            print(f"  - {cfp.title}")
+            print(f"    Deadline: {cfp.deadline}")
+
+asyncio.run(find_top_journals_by_topic())
+```
+
+**Key Features**:
+- 🎯 **Topic-based search**: Finds journals that publish papers on specific topics
+- 📊 **Quality ranking**: Results sorted by citation rate (citations per paper)
+- 🚫 **Filters non-journals**: Excludes arXiv, bioRxiv, and other preprint servers
+- ⭐ **Top-tier focus**: Only includes established journals (500+ papers minimum)
+
+### Direct Journal Search
+
 ```python
 import asyncio
 from call4paper.tools.search import search_journal_cfp
 
 async def main():
-    # Search for CFPs
+    # Search for CFPs in a specific journal
     result = await search_journal_cfp("Building Simulation", count=3)
     print(f"Found {result.total_count} CFPs")
     for cfp in result.items:

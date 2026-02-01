@@ -137,6 +137,81 @@ async def get_publisher(journal_name: str) -> str:
         }, indent=2)
 
 
+@mcp.tool()
+async def search_journals_by_keyword(
+    keyword: str,
+    max_results: int = 15,
+    min_works: int = 500,
+    mode: str = "topic"
+) -> str:
+    """Search for academic journals by keyword or research topic.
+    
+    This tool enables cross-journal CFP discovery by searching for journals
+    that publish papers on specific topics. Results are sorted by quality
+    (citation rate, similar to Impact Factor).
+    
+    Args:
+        keyword: Research topic or keyword (e.g., "machine learning", "renewable energy",
+                "blockchain", "computer vision")
+        max_results: Maximum journals to return (default: 15, max: 50)
+        min_works: Minimum published papers to filter quality journals (default: 500)
+        mode: "topic" (search by research topic, default) or "name" (search journal names)
+    
+    Returns:
+        JSON string with journal list sorted by citation rate (quality indicator):
+        - journal_name: Official name (use with search_cfp tool)
+        - publisher: Publisher name
+        - citation_rate: Citations per paper (quality metric, like Impact Factor)
+        - works_count: Total published papers
+        - cited_by_count: Total citations
+        - topic_papers_count: (topic mode) Papers on this specific topic
+        
+    Example workflow:
+        1. search_journals_by_keyword("deep learning") → Get top journals by quality
+        2. Pick high-citation-rate journals (e.g., "Neural Networks")
+        3. search_cfp("Neural Networks") → Get CFPs
+    
+    Note: Results exclude preprint servers (arXiv, bioRxiv) and only include
+          peer-reviewed journals. Citation rate is used as quality indicator.
+    """
+    try:
+        # Validate parameters
+        max_results = min(max(1, max_results), 50)
+        min_works = max(100, min_works)  # Minimum 100 to ensure quality
+        mode = mode.lower() if mode in ["topic", "name"] else "topic"
+        
+        results = await Config.search_journals_by_keyword(
+            keyword=keyword,
+            max_results=max_results,
+            min_works=min_works,
+            mode=mode
+        )
+        
+        if not results:
+            return json.dumps({
+                "keyword": keyword,
+                "search_mode": mode,
+                "total_found": 0,
+                "journals": [],
+                "message": "No journals found. Try different keywords or lower min_works threshold."
+            }, indent=2)
+        
+        return json.dumps({
+            "keyword": keyword,
+            "search_mode": mode,
+            "total_found": len(results),
+            "journals": results,
+            "note": "Results sorted by citation rate (quality). Use 'journal_name' with search_cfp() to find CFPs."
+        }, indent=2)
+        
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "keyword": keyword,
+            "message": "Failed to search journals by keyword."
+        }, indent=2)
+
+
 def main():
     """Run the MCP server."""
     mcp.run()
@@ -144,3 +219,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

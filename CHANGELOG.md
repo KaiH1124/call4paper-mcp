@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cross-journal keyword search**: `search_journals_by_keyword` MCP tool for topic-based journal discovery
+- **Topic-based search mode**: Search journals by research topic (not just journal name) using OpenAlex Works API
+- **Quality ranking system**: Results sorted by citation rate (citations per paper, similar to Impact Factor)
+- **Smart filtering**: Automatically excludes preprint servers (arXiv, bioRxiv, Zenodo) and non-journal sources
+- **Citation metrics**: Added `citation_rate` field as quality indicator for journal ranking
+- **Topic relevance tracking**: Shows number of papers each journal published on the search topic
 - Initial MCP server implementation for Call for Papers retrieval
 - Support for Springer Nature journal CFP scraping
 - Support for Elsevier/ScienceDirect with JSON extraction
@@ -26,8 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Enhanced `search_journal_cfp` to automatically detect publisher for journals not in registry
 - Updated Config class with OpenAlex API methods and publisher normalization
+- **Improved `search_journals_by_keyword`**: Now uses Works API for true topic-based search instead of name matching
+- **Increased default `min_works` threshold**: From 100 to 500 to focus on established journals
+- **Updated sorting algorithm**: Primary sort by citation rate, secondary by topic relevance
+- Extended OpenAlex timeout to 30 seconds for complex queries
 
 ### Fixed
+- **Filtered out non-journal sources**: Removed arXiv, Zenodo, SSRN from journal search results
+- **Improved journal type detection**: Added strict `type='journal'` filter to exclude conferences and repositories
 
 ### Removed
 
