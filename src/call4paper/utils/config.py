@@ -122,39 +122,72 @@ class Config:
     @classmethod
     async def get_publisher_from_openalex(cls, journal_name: str) -> Optional[dict]:
         """Get publisher information from OpenAlex API.
-        
+
         Args:
             journal_name: Name of the journal to search
-            
+
         Returns:
             Dictionary with journal and publisher information, or None if not found
         """
         url = f"{cls.OPENALEX_API_BASE}/autocomplete/sources"
         params = {"q": journal_name}
-        
+
         try:
             async with httpx.AsyncClient(timeout=cls.OPENALEX_TIMEOUT) as client:
                 response = await client.get(url, params=params)
                 response.raise_for_status()
                 data = response.json()
-                
+
                 if not data.get("results"):
                     return None
-                
+
                 # Get the best match (first result)
                 result = data["results"][0]
                 publisher_raw = result.get("hint", "")
-                
+                openalex_id = result.get("id")
+
+                # Fetch full source details to get homepage_url
+                homepage_url = None
+                springer_journal_id = None
+
+                if openalex_id:
+                    source_id = openalex_id.split('/')[-1]
+                    detail_url = f"{cls.OPENALEX_API_BASE}/sources/{source_id}"
+
+                    try:
+                        detail_response = await client.get(detail_url)
+                        detail_response.raise_for_status()
+                        detail_data = detail_response.json()
+                        homepage_url = detail_data.get("homepage_url", "")
+
+                        # Extract Springer journal ID from homepage URL
+                        # Handle both formats:
+                        # - https://www.springer.com/journal/12273
+                        # - http://www.springer.com/computer/programming/journal/11227
+                        # - https://link.springer.com/journal/12053
+                        if homepage_url and "/journal/" in homepage_url and "springer" in homepage_url.lower():
+                            parts = homepage_url.split('/journal/')
+                            if len(parts) > 1:
+                                # Extract journal ID (numeric part after /journal/)
+                                journal_id_part = parts[1].split('/')[0].split('?')[0]
+                                # Ensure it's numeric
+                                if journal_id_part.isdigit():
+                                    springer_journal_id = journal_id_part
+                    except Exception:
+                        pass  # Continue with autocomplete data
+
                 return {
                     "journal_name": result.get("display_name"),
                     "publisher_raw": publisher_raw,
                     "publisher": cls.normalize_publisher_name(publisher_raw),
                     "issn": result.get("external_id"),
-                    "openalex_id": result.get("id"),
+                    "openalex_id": openalex_id,
                     "works_count": result.get("works_count"),
                     "cited_by_count": result.get("cited_by_count"),
+                    "homepage_url": homepage_url,
+                    "springer_journal_id": springer_journal_id,
                 }
-                
+
         except Exception:
             # Silently fail - this is a fallback mechanism
             return None

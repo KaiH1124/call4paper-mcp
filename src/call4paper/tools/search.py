@@ -82,21 +82,28 @@ async def search_journal_cfp(
     journal_info = Config.get_cfp_url_for_journal(journal_name)
     if journal_info:
         publisher = journal_info.get("publisher", "Elsevier")
-        # Still use browse page even if journal is in registry
-        # Only use specific journal URL if explicitly configured
-        if journal_info.get("use_specific_url", False):
+        # For non-Elsevier publishers (Springer, IEEE, Wiley), always use specific URL from registry
+        # For Elsevier, use browse page for unified search (unless use_specific_url is set)
+        if journal_info.get("publisher", "").lower() != "elsevier":
+            cfp_url = journal_info.get("cfp_url", cfp_url)
+        elif journal_info.get("use_specific_url", False):
             cfp_url = journal_info.get("cfp_url", cfp_url)
     else:
         # If not in registry, try OpenAlex API to identify publisher
         openalex_info = await Config.get_publisher_from_openalex(journal_name)
         if openalex_info:
             detected_publisher = openalex_info.get("publisher", "unknown")
-            
+
             # Update publisher and CFP URL based on detected publisher
             if detected_publisher == "springer":
                 publisher = "Springer"
-                # Use generic Springer collections page
-                cfp_url = "https://link.springer.com/search?facet-content-type=%22Collection%22&facet-discipline=%22Computer+Science%22"
+                # Try to construct specific journal URL using journal ID
+                springer_journal_id = openalex_info.get("springer_journal_id")
+                if springer_journal_id:
+                    cfp_url = f"https://link.springer.com/journal/{springer_journal_id}/collections?filter=Open"
+                else:
+                    # Fallback to generic search page
+                    cfp_url = "https://link.springer.com/search?facet-content-type=%22Collection%22&facet-discipline=%22Computer+Science%22"
             elif detected_publisher == "wiley":
                 publisher = "Wiley"
                 # Use generic Wiley special issues page if available
@@ -307,13 +314,18 @@ def _filter_by_journal(cfp_list: CFPList, journal_name: str) -> CFPList:
 
 def list_supported_publishers() -> list[dict]:
     """List all supported publishers and their domains.
+    
+    Only Elsevier and Springer are supported due to anti-scraping measures
+    on IEEE and Wiley websites that lack centralized search hubs.
 
     Returns:
         List of publisher information dicts
     """
+    # Only support publishers with reliable CFP access
+    supported_parsers = [ElsevierParser, SpringerParser]
     publishers = []
 
-    for parser_class in PARSER_CLASSES:
+    for parser_class in supported_parsers:
         publishers.append({
             "name": parser_class.publisher_name,
             "domains": parser_class.supported_domains,

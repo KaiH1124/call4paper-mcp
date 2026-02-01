@@ -31,11 +31,15 @@ python tests/test_search_local.py
 
 ### MCP Server Entry Point
 `src/call4paper/server.py` - FastMCP server exposing five tools:
-- `search_cfp(journal_name, count)` - Search CFPs for a journal
+- `search_cfp(journal_name, count)` - Search CFPs for a journal (Elsevier/Springer only)
 - `get_cfp_detail(cfp_url, journal_name)` - Get detailed CFP info
-- `list_publishers()` - List supported publishers
-- `get_publisher(journal_name)` - Identify journal's publisher via OpenAlex API
+- `list_publishers()` - List supported publishers (Elsevier, Springer)
+- `get_publisher(journal_name)` - Identify journal's publisher via OpenAlex API (use FIRST!)
 - **`search_journals_by_keyword(keyword, max_results, min_works, mode)`** - 🆕 Cross-journal keyword search with quality ranking
+
+**Recommended Workflow**:
+1. For journal name: `get_publisher()` → check if Elsevier/Springer → `search_cfp()`
+2. For keywords: `search_journals_by_keyword()` → `get_publisher()` → `search_cfp()`
 
 ### Parser System
 All parsers inherit from `BaseParser` (`parsers/base.py`):
@@ -44,12 +48,15 @@ parsers/
 ├── base.py       # Abstract class with parse_cfp_list(), parse_cfp_detail()
 ├── elsevier.py   # JSON extraction from window.INITIAL_STATE (~2700 CFPs)
 ├── springer.py   # Article element parsing (fully working)
-├── ieee.py       # Planned
-├── wiley.py      # Planned
+├── ieee.py       # Not supported - anti-scraping measures
+├── wiley.py      # Not supported - anti-scraping measures
 └── generic.py    # Fallback for unknown publishers
 ```
 
 Parser selection in `tools/search.py` uses URL domain matching via `can_handle()`.
+
+**Note**: Only Elsevier and Springer parsers are actively used. IEEE and Wiley have
+anti-scraping measures and lack centralized CFP hubs.
 
 ### Search Flow (`tools/search.py`)
 1. Check 24-hour cache

@@ -52,17 +52,17 @@ class SpringerParser(BaseParser):
 
     def _parse_article_entry(self, article, base_url: str) -> Optional[CallForPaper]:
         """Parse a single article element containing CFP info."""
-        # Get title from h2
-        h2 = article.find("h2")
-        if not h2:
+        # Get title from h2 or h3 (Springer uses both)
+        heading = article.find("h2") or article.find("h3")
+        if not heading:
             return None
 
-        title = self._clean_text(h2.get_text())
+        title = self._clean_text(heading.get_text())
         if not title or len(title) < 5:
             return None
 
-        # Get URL from link in h2
-        link = h2.find("a", href=True)
+        # Get URL from link in heading
+        link = heading.find("a", href=True)
         cfp_url = urljoin(base_url, link["href"]) if link else base_url
 
         # Get full article text for extraction

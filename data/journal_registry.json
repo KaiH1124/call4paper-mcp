@@ -141,6 +141,20 @@
       "publisher": "springer",
       "cfp_url": "https://link.springer.com/journal/10489/collections?filter=Open",
       "journal_id": "10489"
+    },
+    {
+      "name": "BMC Biology",
+      "aliases": ["bmc biol"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/12915/collections?filter=Open",
+      "journal_id": "12915"
+    },
+    {
+      "name": "Cellular and Molecular Life Sciences",
+      "aliases": ["cmls", "cellular & molecular life sciences"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/18/collections?filter=Open",
+      "journal_id": "18"
     }
   ]
 }

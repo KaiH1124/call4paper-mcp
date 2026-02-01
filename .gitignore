@@ -23,3 +23,5 @@ uv.lock
 tests/
 docs/
 *.html
+*.md
+!README.md

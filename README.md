@@ -9,8 +9,7 @@ An MCP (Model Context Protocol) server for retrieving academic journal Call for 
 - 🏢 Support for major academic publishers:
   - **Springer Nature** ✅ (fully working)
   - **Elsevier/ScienceDirect** ✅ (fully working - unified browse page with JSON extraction)
-  - IEEE (planned)
-  - Wiley (planned)
+  - **Note**: IEEE and Wiley are not supported due to anti-scraping measures without centralized CFP hubs
 - 💾 Automatic caching with 24-hour TTL
 - 🔄 Fallback generic parser for unsupported publishers
 - ⚡ Smart JSON extraction from dynamically loaded pages
@@ -50,7 +49,7 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 #### `search_journals_by_keyword` 🆕
 Search for academic journals by keyword or research topic (cross-journal discovery).
 
-**NEW: Topic-based search with quality ranking!**
+**NEW: Topic-based search with quality ranking and publisher filtering!**
 
 ```
 Input:
@@ -58,35 +57,45 @@ Input:
 - max_results: Maximum number of journals to return (default: 15)
 - min_works: Minimum published papers to filter quality journals (default: 500)
 - mode: "topic" (search by research topic, default) or "name" (search journal names)
+- supported_only: Only return Elsevier/Springer journals (default: True)
 
 Output: JSON with journal list sorted by citation rate (quality indicator):
   - citation_rate: Citations per paper (similar to Impact Factor)
   - topic_papers_count: Number of papers on this specific topic
+  - is_supported: Whether CFPs can be automatically retrieved
+  - publisher_normalized: Standardized publisher identifier
   - Excludes preprint servers (arXiv, bioRxiv, etc.)
   - Only includes peer-reviewed journals
 ```
 
-**Workflow**: Use this to find top-tier journals by topic, then use `search_cfp` to get CFPs.
+**Workflow**: By default, only shows Elsevier/Springer journals (supported publishers).
 
 **Example**:
-1. `search_journals_by_keyword("deep learning", mode="topic")` → Get top journals ranked by quality
-2. Results show "Nature Communications" (citation_rate: 83.8) at the top
-3. `search_cfp("Nature Communications", count=5)` → Get CFPs for that journal
+1. `search_journals_by_keyword("deep learning", supported_only=True)` → Get supported journals only
+2. Results show only Elsevier/Springer journals ranked by quality
+3. `search_cfp("Neural Networks", count=5)` → Get CFPs directly (no need to check publisher)
 
 **Quality Metrics**:
 - **Citation Rate** = Total Citations ÷ Total Papers (proxy for Impact Factor)
 - Filters out non-journals (arXiv, Zenodo, conference proceedings)
 - Minimum 500 papers to ensure established journals
+- **Default behavior**: Only shows supported publishers (Elsevier, Springer)
+
+**Note**: Set `supported_only=False` to see all journals, but only Elsevier/Springer can be searched.
 
 #### `search_cfp`
 Search for Call for Papers for a specific journal.
 
+**IMPORTANT**: Use `get_publisher()` first to verify journal and publisher support!
+
 ```
 Input:
-- journal_name: Name of the journal (e.g., "Building Simulation")
+- journal_name: Exact name of the journal (use name from get_publisher result)
 - count: Maximum results to return (default: 5)
 
 Output: JSON with CFP entries including title, deadline, URL, description
+
+Supported publishers: Elsevier, Springer only
 ```
 
 #### `get_cfp_detail`
@@ -103,18 +112,26 @@ Output: JSON with detailed CFP info including guest editors, topics, submission 
 #### `get_publisher`
 Identify the publisher of a journal using OpenAlex API.
 
+**Use this FIRST before calling search_cfp()!**
+
 ```
 Input:
 - journal_name: Name of the journal
 
-Output: JSON with publisher info, ISSN, citation statistics
+Output: JSON with publisher info, ISSN, citation statistics, and support status
+  - is_supported: Boolean indicating if Elsevier or Springer
+  - journal_name: Official name to use with search_cfp()
+  
+Only Elsevier and Springer publishers are supported.
 ```
 
 #### `list_publishers`
-List supported publishers.
+List supported publishers (Elsevier and Springer only).
 
 ```
 Output: JSON with supported publishers and their domains
+
+Note: IEEE and Wiley are not supported due to anti-scraping measures
 ```
 
 ## Supported Journals
@@ -252,10 +269,22 @@ async def find_top_journals_by_topic():
         print(f"  Papers on this topic: {journal['topic_papers_count']:,}")
         print(f"  Publisher: {journal['publisher_raw']}\n")
     
-    # Step 2: Search CFPs for top journals
+    # Step 2: Check publisher support and search CFPs for top journals
     for journal in journals[:3]:
         journal_name = journal['journal_name']
-        print(f"\nSearching CFPs for: {journal_name}")
+        
+        # Verify publisher support
+        publisher_info = await Config.get_publisher_from_openalex(journal_name)
+        if not publisher_info:
+            print(f"\nSkipping {journal_name}: Not found in OpenAlex")
+            continue
+            
+        normalized_publisher = publisher_info.get('publisher', 'unknown')
+        if normalized_publisher not in ['elsevier', 'springer']:
+            print(f"\nSkipping {journal_name}: Publisher {publisher_info.get('publisher_raw')} not supported")
+            continue
+        
+        print(f"\nSearching CFPs for: {journal_name} ({publisher_info.get('publisher_raw')})")
         
         cfp_list = await search_journal_cfp(journal_name, count=5)
         for cfp in cfp_list.items:
@@ -333,11 +362,13 @@ uv run call4paper
 
 ## Known Limitations
 
-1. **Elsevier Journal Name Matching**: Some CFPs may have journal names listed as "Test" if not properly extracted from HTML fallback. JSON extraction method resolves this issue.
+1. **Publisher Support**: Only Elsevier and Springer journals are supported. IEEE and Wiley have anti-scraping measures and lack centralized CFP search hubs.
 
-2. **Guest Editor Extraction**: May include false positives in some cases. Guest editors are extracted from summary field when available.
+2. **Elsevier Journal Name Matching**: Some CFPs may have journal names listed as "Test" if not properly extracted from HTML fallback. JSON extraction method resolves this issue.
 
-3. **Deadline Parsing**: Handles ISO format dates (YYYY-MM-DD) from Elsevier JSON. Other formats may require additional parsing logic.
+3. **Guest Editor Extraction**: May include false positives in some cases. Guest editors are extracted from summary field when available.
+
+4. **Deadline Parsing**: Handles ISO format dates (YYYY-MM-DD) from Elsevier JSON. Other formats may require additional parsing logic.
 
 > **Local Execution Only**  
 > This MCP server runs **locally on your machine**. There is no centralized API or server.  
