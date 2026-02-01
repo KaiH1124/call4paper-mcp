@@ -1,0 +1,146 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2025-01-01",
+  "journals": [
+    {
+      "name": "Energy and Buildings",
+      "aliases": ["energy buildings", "enb"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/energy-and-buildings/about/call-for-papers",
+      "journal_slug": "energy-and-buildings"
+    },
+    {
+      "name": "Building and Environment",
+      "aliases": ["build environ", "bne"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/building-and-environment/about/call-for-papers",
+      "journal_slug": "building-and-environment"
+    },
+    {
+      "name": "Information Sciences",
+      "aliases": ["inf sci", "information science"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/information-sciences/about/call-for-papers",
+      "journal_slug": "information-sciences"
+    },
+    {
+      "name": "Applied Energy",
+      "aliases": ["appl energy"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/applied-energy/about/call-for-papers",
+      "journal_slug": "applied-energy"
+    },
+    {
+      "name": "Renewable Energy",
+      "aliases": ["renew energy"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/renewable-energy/about/call-for-papers",
+      "journal_slug": "renewable-energy"
+    },
+    {
+      "name": "Expert Systems with Applications",
+      "aliases": ["eswa", "expert systems"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/expert-systems-with-applications/about/call-for-papers",
+      "journal_slug": "expert-systems-with-applications"
+    },
+    {
+      "name": "Computers in Industry",
+      "aliases": ["comp ind"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/computers-in-industry/about/call-for-papers",
+      "journal_slug": "computers-in-industry"
+    },
+    {
+      "name": "Knowledge-Based Systems",
+      "aliases": ["kbs", "knowledge based"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/knowledge-based-systems/about/call-for-papers",
+      "journal_slug": "knowledge-based-systems"
+    },
+    {
+      "name": "Neurocomputing",
+      "aliases": ["neuro", "neurocomp"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/neurocomputing/about/call-for-papers",
+      "journal_slug": "neurocomputing"
+    },
+    {
+      "name": "Pattern Recognition",
+      "aliases": ["pr", "pattern recog"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/pattern-recognition/about/call-for-papers",
+      "journal_slug": "pattern-recognition"
+    },
+    {
+      "name": "Journal of Cleaner Production",
+      "aliases": ["jclp", "cleaner production"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/journal-of-cleaner-production/about/call-for-papers",
+      "journal_slug": "journal-of-cleaner-production"
+    },
+    {
+      "name": "Sustainable Cities and Society",
+      "aliases": ["scs", "sustainable cities"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/sustainable-cities-and-society/about/call-for-papers",
+      "journal_slug": "sustainable-cities-and-society"
+    },
+    {
+      "name": "Future Generation Computer Systems",
+      "aliases": ["fgcs", "future gen"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/future-generation-computer-systems/about/call-for-papers",
+      "journal_slug": "future-generation-computer-systems"
+    },
+    {
+      "name": "Automation in Construction",
+      "aliases": ["autcon", "auto construct"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/automation-in-construction/about/call-for-papers",
+      "journal_slug": "automation-in-construction"
+    },
+    {
+      "name": "Internet of Things",
+      "aliases": ["iot"],
+      "publisher": "elsevier",
+      "cfp_url": "https://www.sciencedirect.com/journal/internet-of-things/about/call-for-papers",
+      "journal_slug": "internet-of-things"
+    },
+    {
+      "name": "Building Simulation",
+      "aliases": ["build sim", "building sim"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/12273/collections?filter=Open",
+      "journal_id": "12273"
+    },
+    {
+      "name": "Energy Efficiency",
+      "aliases": ["energy eff"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/12053/collections?filter=Open",
+      "journal_id": "12053"
+    },
+    {
+      "name": "Machine Learning",
+      "aliases": ["ml", "mach learn"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/10994/collections?filter=Open",
+      "journal_id": "10994"
+    },
+    {
+      "name": "Neural Computing and Applications",
+      "aliases": ["nca", "neural computing"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/521/collections?filter=Open",
+      "journal_id": "521"
+    },
+    {
+      "name": "Applied Intelligence",
+      "aliases": ["appl intell"],
+      "publisher": "springer",
+      "cfp_url": "https://link.springer.com/journal/10489/collections?filter=Open",
+      "journal_id": "10489"
+    }
+  ]
+}
