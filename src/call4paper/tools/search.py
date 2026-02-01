@@ -86,6 +86,31 @@ async def search_journal_cfp(
         # Only use specific journal URL if explicitly configured
         if journal_info.get("use_specific_url", False):
             cfp_url = journal_info.get("cfp_url", cfp_url)
+    else:
+        # If not in registry, try OpenAlex API to identify publisher
+        openalex_info = await Config.get_publisher_from_openalex(journal_name)
+        if openalex_info:
+            detected_publisher = openalex_info.get("publisher", "unknown")
+            
+            # Update publisher and CFP URL based on detected publisher
+            if detected_publisher == "springer":
+                publisher = "Springer"
+                # Use generic Springer collections page
+                cfp_url = "https://link.springer.com/search?facet-content-type=%22Collection%22&facet-discipline=%22Computer+Science%22"
+            elif detected_publisher == "wiley":
+                publisher = "Wiley"
+                # Use generic Wiley special issues page if available
+                cfp_url = "https://onlinelibrary.wiley.com/"
+            elif detected_publisher == "ieee":
+                publisher = "IEEE"
+                cfp_url = "https://ieee.org/publications/special-issues"
+            elif detected_publisher == "elsevier":
+                publisher = "Elsevier"
+                # Keep default ScienceDirect browse page
+            else:
+                # Unknown publisher, keep default Elsevier browse page
+                # It will likely return no results, but that's expected
+                pass
 
     # Fetch the page - try multiple methods
     html, error = await fetch_page(cfp_url)

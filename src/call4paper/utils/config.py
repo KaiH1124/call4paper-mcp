@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Optional
+import httpx
 
 
 class Config:
@@ -31,6 +32,14 @@ class Config:
         "wiley": "https://onlinelibrary.wiley.com/journal/{journal_id}",
     }
 
+    # Publisher name normalization mapping
+    PUBLISHER_NORMALIZATION = {
+        "elsevier": ["elsevier", "elsevier bv"],
+        "springer": ["springer", "springer nature", "springer science and business media"],
+        "wiley": ["wiley", "john wiley", "wiley-blackwell"],
+        "ieee": ["ieee", "institute of electrical and electronics engineers"],
+    }
+
     # Cache settings
     CACHE_TTL_HOURS = 24
     CACHE_DIR = Path.home() / ".cache" / "call4paper"
@@ -41,6 +50,10 @@ class Config:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
+    
+    # OpenAlex API settings
+    OPENALEX_API_BASE = "https://api.openalex.org"
+    OPENALEX_TIMEOUT = 10
 
     @classmethod
     def get_publisher_from_url(cls, url: str) -> Optional[str]:
@@ -83,3 +96,65 @@ class Config:
                 if alias.lower() == normalized:
                     return entry
         return None
+
+    @classmethod
+    def normalize_publisher_name(cls, publisher_raw: str) -> str:
+        """Normalize publisher name to standard identifier.
+        
+        Args:
+            publisher_raw: Raw publisher name from external sources
+            
+        Returns:
+            Normalized publisher identifier (e.g., 'elsevier', 'springer')
+        """
+        if not publisher_raw:
+            return "unknown"
+        
+        publisher_lower = publisher_raw.lower()
+        
+        for standard_name, patterns in cls.PUBLISHER_NORMALIZATION.items():
+            for pattern in patterns:
+                if pattern in publisher_lower:
+                    return standard_name
+        
+        return "unknown"
+
+    @classmethod
+    async def get_publisher_from_openalex(cls, journal_name: str) -> Optional[dict]:
+        """Get publisher information from OpenAlex API.
+        
+        Args:
+            journal_name: Name of the journal to search
+            
+        Returns:
+            Dictionary with journal and publisher information, or None if not found
+        """
+        url = f"{cls.OPENALEX_API_BASE}/autocomplete/sources"
+        params = {"q": journal_name}
+        
+        try:
+            async with httpx.AsyncClient(timeout=cls.OPENALEX_TIMEOUT) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                
+                if not data.get("results"):
+                    return None
+                
+                # Get the best match (first result)
+                result = data["results"][0]
+                publisher_raw = result.get("hint", "")
+                
+                return {
+                    "journal_name": result.get("display_name"),
+                    "publisher_raw": publisher_raw,
+                    "publisher": cls.normalize_publisher_name(publisher_raw),
+                    "issn": result.get("external_id"),
+                    "openalex_id": result.get("id"),
+                    "works_count": result.get("works_count"),
+                    "cited_by_count": result.get("cited_by_count"),
+                }
+                
+        except Exception:
+            # Silently fail - this is a fallback mechanism
+            return None

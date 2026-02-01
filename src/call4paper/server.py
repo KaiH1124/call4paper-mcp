@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .tools.search import search_journal_cfp, get_cfp_details, list_supported_publishers
 from .models.cfp import CFPList, CallForPaper
+from .utils.config import Config
 
 # Initialize FastMCP server
 mcp = FastMCP("call4paper")
@@ -97,6 +98,43 @@ def list_publishers() -> str:
         "total": len(publishers),
         "note": "Journals from unsupported publishers will use generic parsing."
     }, indent=2)
+
+
+@mcp.tool()
+async def get_publisher(journal_name: str) -> str:
+    """Identify the publisher of a journal using OpenAlex API.
+    
+    This tool helps identify which publisher owns a specific journal,
+    which is useful for determining how to retrieve CFP information.
+    
+    Args:
+        journal_name: Name of the journal to identify (e.g., "Nature", 
+                     "IEEE Access", "Information Sciences")
+    
+    Returns:
+        JSON string containing publisher information including:
+        - journal_name: Official name of the journal
+        - publisher_raw: Raw publisher name from OpenAlex
+        - publisher: Normalized publisher identifier (elsevier/springer/wiley/ieee)
+        - issn: ISSN identifier
+        - works_count: Number of published works
+        - cited_by_count: Total citations
+    """
+    try:
+        info = await Config.get_publisher_from_openalex(journal_name)
+        if info:
+            return json.dumps(info, indent=2)
+        return json.dumps({
+            "error": "Journal not found",
+            "journal_name": journal_name,
+            "message": "Could not find this journal in OpenAlex database. Try a different spelling or full journal name."
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "journal_name": journal_name,
+            "message": "Failed to retrieve publisher information."
+        }, indent=2)
 
 
 def main():

@@ -17,8 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playwright integration for dynamic page handling
 - Search tool for finding CFPs by journal name
 - Scraper tool for direct URL parsing
+- OpenAlex API integration for automatic journal publisher identification
+- `get_publisher` MCP tool for identifying journal publishers
+- Publisher name normalization system supporting Elsevier, Springer, Wiley, IEEE
+- Smart fallback mechanism: registry → OpenAlex API → default
+- Test suite for OpenAlex API integration (test_openalex_api.py)
 
 ### Changed
+- Enhanced `search_journal_cfp` to automatically detect publisher for journals not in registry
+- Updated Config class with OpenAlex API methods and publisher normalization
 
 ### Fixed
 
