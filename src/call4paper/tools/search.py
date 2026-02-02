@@ -1,5 +1,6 @@
 """Search and retrieval tools for CFP information."""
 
+from pathlib import Path
 from typing import Optional
 
 from ..models.cfp import CallForPaper, CFPList
@@ -26,6 +27,10 @@ PARSER_CLASSES: list[type[BaseParser]] = [
 
 # Cache instance
 _cache = CacheManager()
+
+
+class BotProtectionError(RuntimeError):
+    """Raised when a site blocks automated access."""
 
 
 def get_parser_for_url(url: str, journal_name: str) -> BaseParser:
@@ -216,21 +221,37 @@ async def get_cfp_details(cfp_url: str, journal_name: str = "") -> Optional[Call
     # Check cache
     cache_key = f"cfp_detail:{cfp_url}"
     cached = _cache.get(cache_key)
-    if cached:
+    if cached and "link.springer.com/collections" not in cfp_url:
         return CallForPaper(**cached)
 
     # Fetch page
     html, error = await fetch_page(cfp_url)
-    if html is None:
-        if error == "blocked":
-            html, _ = await fetch_page_dynamic(cfp_url)
+    if html is None and error == "blocked":
+        html, dyn_error = await fetch_page_dynamic(cfp_url)
+        if dyn_error == "bot_protection":
+            raise BotProtectionError("bot_protection")
 
     if html is None:
         return None
 
+    # Debug: save Springer collection HTML for parser tuning
+    if "link.springer.com/collections" in cfp_url:
+        try:
+            debug_path = Path("/tmp/call4paper_springer_detail_debug.html")
+            debug_path.write_text(html, encoding="utf-8")
+        except Exception:
+            pass
+
     # Parse with appropriate parser
     parser = get_parser_for_url(cfp_url, journal_name or "Unknown Journal")
     cfp = parser.parse_cfp_detail(html, cfp_url)
+    if not cfp:
+        # Retry with Playwright-rendered HTML for dynamic pages
+        html_dynamic, dyn_error = await fetch_page_dynamic(cfp_url)
+        if dyn_error == "bot_protection":
+            raise BotProtectionError("bot_protection")
+        if html_dynamic:
+            cfp = parser.parse_cfp_detail(html_dynamic, cfp_url)
 
     # Cache result
     if cfp:

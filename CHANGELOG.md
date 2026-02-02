@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Springer collection editor extraction from structured editors section
+- Bot protection error surfaced in `get_cfp_detail` responses
+- Debug capture of Springer collection HTML to `/tmp/call4paper_springer_detail_debug.html`
+
+### Changed
+- Elsevier CFP URLs now use `special-issue/{contentId}/{slug}` format
+- Elsevier detail parsing enhanced with JSON-LD and INITIAL_STATE fallbacks
+- CFP detail fetch retries with Playwright when initial parsing fails
+- Springer collection detail requests bypass cache to improve freshness
+
+### Fixed
+- Springer guest editor parsing to avoid noisy non-name tokens
+- Regex handling for editor names with hyphens/apostrophes
+- Clearer error messaging when publishers block automated access
 
 ## [0.2.0] - 2026-02-02
 

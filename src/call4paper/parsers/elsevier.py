@@ -261,11 +261,21 @@ class ElsevierParser(BaseParser):
 
     def parse_cfp_detail(self, html: str, url: str) -> Optional[CallForPaper]:
         """Parse a single CFP detail page."""
+        import json
+
         soup = self._create_soup(html)
 
         # Find title
-        title_elem = soup.find("h1") or soup.find("title")
+        title_elem = soup.find("h1")
+        if not title_elem:
+            og_title = soup.find("meta", {"property": "og:title"})
+            if og_title and og_title.get("content"):
+                title_elem = og_title
+        if not title_elem:
+            title_elem = soup.find("title")
         title = self._clean_text(title_elem.get_text()) if title_elem else "Unknown"
+        if title_elem and title_elem.name == "meta":
+            title = self._clean_text(title_elem.get("content", "")) or title
 
         # Find deadline
         deadline = None
@@ -301,7 +311,7 @@ class ElsevierParser(BaseParser):
 
         # Find description
         description = None
-        desc_elem = soup.find("meta", {"name": "description"})
+        desc_elem = soup.find("meta", {"property": "og:description"}) or soup.find("meta", {"name": "description"})
         if desc_elem:
             description = desc_elem.get("content")
         if not description:
@@ -315,6 +325,66 @@ class ElsevierParser(BaseParser):
         submit_link = soup.find("a", string=re.compile(r"submit|submission", re.I))
         if submit_link and submit_link.get("href"):
             submission_url = urljoin(url, submit_link["href"])
+
+        # Special-issue pages often embed structured data
+        def _find_json_block(predicate):
+            def _walk(obj):
+                if isinstance(obj, dict):
+                    if predicate(obj):
+                        return obj
+                    for value in obj.values():
+                        hit = _walk(value)
+                        if hit:
+                            return hit
+                elif isinstance(obj, list):
+                    for item in obj:
+                        hit = _walk(item)
+                        if hit:
+                            return hit
+                return None
+            return _walk
+
+        # Try JSON-LD for title/description
+        for script in soup.find_all("script", {"type": "application/ld+json"}):
+            try:
+                data = json.loads(script.string or "")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(data, list):
+                candidates = data
+            else:
+                candidates = [data]
+            for item in candidates:
+                if isinstance(item, dict):
+                    if title == "Unknown" and item.get("name"):
+                        title = self._clean_text(item.get("name"))
+                    if not description and item.get("description"):
+                        description = self._clean_text(item.get("description"))[:500]
+
+        # Try window.INITIAL_STATE for deadline and editors
+        init_script = soup.find(string=re.compile(r"window\\.INITIAL_STATE", re.I))
+        if init_script:
+            match = re.search(r"window\\.INITIAL_STATE\\s*=\\s*(\\{.*\\});", init_script, re.S)
+            if match:
+                try:
+                    data = json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    data = None
+                if data:
+                    finder = _find_json_block(lambda o: "submissionDeadline" in o or "expiryDate" in o)
+                    block = finder(data)
+                    if block:
+                        if not deadline:
+                            deadline = self._extract_date(
+                                str(block.get("submissionDeadline") or block.get("expiryDate") or "")
+                            )
+                        if title == "Unknown" and block.get("title"):
+                            title = self._clean_text(block.get("title"))
+                        summary = block.get("summary") or ""
+                        if summary and not guest_editors:
+                            if "Guest editor" in summary:
+                                editor_text = summary.split("Guest editor")[-1].split(":")[-1].strip()
+                                guest_editors = [e.strip() for e in editor_text.split(",") if e.strip()]
 
         return CallForPaper(
             title=title,
@@ -434,10 +504,11 @@ class ElsevierParser(BaseParser):
         if not title:
             return None
         
-        # Build URL
+        # Build URL (ScienceDirect special issue pages use contentId + slug)
         url_path = item.get('url', '')
-        if url_path and not url_path.startswith('http'):
-            url = urljoin(base_url, f"/browse/calls-for-papers/{url_path}")
+        content_id = item.get('contentId')
+        if content_id and url_path and not url_path.startswith('http'):
+            url = urljoin(base_url, f"/special-issue/{content_id}/{url_path}")
         else:
             url = url_path or base_url
         

@@ -5,7 +5,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from .tools.search import search_journal_cfp, get_cfp_details, list_supported_publishers
+from .tools.search import search_journal_cfp, get_cfp_details, list_supported_publishers, BotProtectionError
 from .models.cfp import CFPList, CallForPaper
 from .utils.config import Config
 
@@ -91,6 +91,12 @@ async def get_cfp_detail(cfp_url: str, journal_name: str = "") -> str:
             "error": "Could not parse CFP details",
             "url": cfp_url,
             "message": "Please visit the URL directly for more information."
+        }, indent=2)
+    except BotProtectionError:
+        return json.dumps({
+            "error": "bot_protection",
+            "url": cfp_url,
+            "message": "Automated access was blocked by the publisher. Please visit the URL directly for full details."
         }, indent=2)
     except Exception as e:
         return json.dumps({
@@ -287,4 +293,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

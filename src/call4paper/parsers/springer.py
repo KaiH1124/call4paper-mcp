@@ -172,19 +172,69 @@ class SpringerParser(BaseParser):
 
         # Find guest editors
         guest_editors = []
-        editor_section = soup.find(string=re.compile(r"guest\s+editor|editor", re.I))
-        if editor_section:
-            parent = editor_section.find_parent()
-            if parent:
-                # Look for names in list items or text
-                items = parent.find_all("li")
-                if items:
-                    guest_editors = [self._clean_text(li.get_text()) for li in items[:10]]
-                else:
-                    # Try to extract from text
-                    text = parent.get_text()
-                    names = re.findall(r"(?:Dr\.|Prof\.|Mr\.|Ms\.)?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)", text)
-                    guest_editors = list(set(names))[:10]
+
+        # Prefer structured collection editors section (Springer collections)
+        editors_section = soup.find(attrs={"data-test": "collection-editors-section"})
+        if editors_section:
+            editor_name_nodes = editors_section.find_all(
+                lambda tag: tag.name in {"h3", "span"}
+                and tag.get("data-test", "").startswith("editor-name")
+            )
+            for node in editor_name_nodes:
+                name = self._clean_text(node.get_text())
+                if name:
+                    guest_editors.append(name)
+
+        def _extract_editor_names(text: str) -> list[str]:
+            cleaned = self._clean_text(text)
+            if not cleaned:
+                return []
+            cleaned = re.sub(r"guest\s+editors?:?", "", cleaned, flags=re.I).strip()
+            cleaned = re.sub(r"editors?:?", "", cleaned, flags=re.I).strip()
+            parts = re.split(r"[;,]|\\band\\b", cleaned)
+            candidates = []
+            for part in parts:
+                part = self._clean_text(part)
+                if not part:
+                    continue
+                candidates.append(part)
+
+            blacklist = re.compile(
+                r"(special issue|springer|springer nature|dear colleagues|topical collection|collection|"
+                r"climate change|building simulation|journal|issue)",
+                re.I,
+            )
+            name_pattern = re.compile(
+                r"^(?:Dr\\.|Prof\\.|Mr\\.|Ms\\.)?\\s*[A-Z][A-Za-z'-]+"
+                r"(?:\\s+[A-Z][A-Za-z'-]+){1,3}$"
+            )
+            results = []
+            for cand in candidates:
+                if blacklist.search(cand):
+                    continue
+                if name_pattern.match(cand):
+                    results.append(cand)
+            return results
+
+        if not guest_editors:
+            editor_section = soup.find(string=re.compile(r"guest\\s+editor|guest\\s+editors|editors?", re.I))
+            if editor_section:
+                parent = editor_section.find_parent()
+                if parent:
+                    # Prefer list items within the section
+                    items = parent.find_all("li")
+                    if items:
+                        for li in items:
+                            guest_editors.extend(_extract_editor_names(li.get_text()))
+                    else:
+                        # Try parent text and a couple of following siblings
+                        guest_editors.extend(_extract_editor_names(parent.get_text()))
+                        for sib in parent.find_all_next(["p", "div", "span"], limit=2):
+                            guest_editors.extend(_extract_editor_names(sib.get_text()))
+
+        # De-duplicate while preserving order
+        seen = set()
+        guest_editors = [e for e in guest_editors if not (e in seen or seen.add(e))]
 
         # Find topics
         topics = []
