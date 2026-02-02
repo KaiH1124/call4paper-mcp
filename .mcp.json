@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "call4paper": {
-      "command": "uv",
-      "args": ["--directory", "/Users/kanxuanhe/Document/260201_call4paper/call4paper", "run", "call4paper"]
-    }
-  }
-}
