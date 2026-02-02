@@ -149,6 +149,7 @@ class Config:
                 # Fetch full source details to get homepage_url
                 homepage_url = None
                 springer_journal_id = None
+                nature_short_name = None
 
                 if openalex_id:
                     source_id = openalex_id.split('/')[-1]
@@ -173,6 +174,20 @@ class Config:
                                 # Ensure it's numeric
                                 if journal_id_part.isdigit():
                                     springer_journal_id = journal_id_part
+                        # Extract Nature short name from homepage URL
+                        if homepage_url and "nature.com" in homepage_url.lower():
+                            try:
+                                from urllib.parse import urlparse
+
+                                parsed = urlparse(homepage_url)
+                                path_parts = [p for p in parsed.path.split("/") if p]
+                                if path_parts:
+                                    if path_parts[0] == "journals" and len(path_parts) > 1:
+                                        nature_short_name = path_parts[1]
+                                    else:
+                                        nature_short_name = path_parts[0]
+                            except Exception:
+                                pass
                     except Exception:
                         pass  # Continue with autocomplete data
 
@@ -186,6 +201,7 @@ class Config:
                     "cited_by_count": result.get("cited_by_count"),
                     "homepage_url": homepage_url,
                     "springer_journal_id": springer_journal_id,
+                    "nature_short_name": nature_short_name,
                 }
 
         except Exception:

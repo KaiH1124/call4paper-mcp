@@ -4,376 +4,82 @@ An MCP (Model Context Protocol) server for retrieving academic journal Call for 
 
 ## Features
 
-- 🔍 **Cross-journal keyword search**: Find journals by research topic using OpenAlex API
-- 📰 Search for Special Issue Call for Papers by journal name
-- 🏢 Support for major academic publishers:
-  - **Springer Nature** ✅ (fully working)
-  - **Elsevier/ScienceDirect** ✅ (fully working - unified browse page with JSON extraction)
-  - **Note**: IEEE and Wiley are not supported due to anti-scraping measures without centralized CFP hubs
-- 💾 Automatic caching with 24-hour TTL
-- 🔄 Fallback generic parser for unsupported publishers
-- ⚡ Smart JSON extraction from dynamically loaded pages
-- 🌐 OpenAlex integration for journal discovery and publisher identification
+- 🔍 Cross-journal keyword search: find journals by research topic (OpenAlex)
+- 📰 Journal CFP search: retrieve special-issue CFPs by journal name
+- 🏢 Mainstream publisher coverage: Elsevier, Springer, and Nature (more to be added)
+- 🧭 Accurate deadlines: detail-page enrichment (especially Nature collections)
+- ⚡ Local MCP server with JSON output
 
-## Installation
+## Install (from GitHub)
 
 ```bash
-# Using uv (recommended)
-cd call4paper
-uv sync
+# pip
+pip install "git+https://github.com/KaiH1124/call4paper-mcp.git"
 
-# Optional: Install Playwright for dynamic pages
-uv sync --extra browser
-uv run playwright install chromium
+# uv tool
+uv tool install "git+https://github.com/KaiH1124/call4paper-mcp.git"
 ```
 
-## Usage
+## MCP Config
 
-### As MCP Server
+Use this MCP server as a local stdio process. Pick the client you use:
 
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Claude Desktop (claude_desktop_config.json):
 
 ```json
 {
   "mcpServers": {
     "call4paper": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/call4paper", "run", "call4paper"]
+      "command": "call4paper",
+      "args": ["serve"]
     }
   }
 }
 ```
 
-### Available Tools
-
-#### `search_journals_by_keyword` 🆕
-Search for academic journals by keyword or research topic (cross-journal discovery).
-
-**NEW: Topic-based search with quality ranking and publisher filtering!**
-
-```
-Input:
-- keyword: Research topic or keyword (e.g., "machine learning", "renewable energy")
-- max_results: Maximum number of journals to return (default: 15)
-- min_works: Minimum published papers to filter quality journals (default: 500)
-- mode: "topic" (search by research topic, default) or "name" (search journal names)
-- supported_only: Only return Elsevier/Springer journals (default: True)
-
-Output: JSON with journal list sorted by citation rate (quality indicator):
-  - citation_rate: Citations per paper (similar to Impact Factor)
-  - topic_papers_count: Number of papers on this specific topic
-  - is_supported: Whether CFPs can be automatically retrieved
-  - publisher_normalized: Standardized publisher identifier
-  - Excludes preprint servers (arXiv, bioRxiv, etc.)
-  - Only includes peer-reviewed journals
-```
-
-**Workflow**: By default, only shows Elsevier/Springer journals (supported publishers).
-
-**Example**:
-1. `search_journals_by_keyword("deep learning", supported_only=True)` → Get supported journals only
-2. Results show only Elsevier/Springer journals ranked by quality
-3. `search_cfp("Neural Networks", count=5)` → Get CFPs directly (no need to check publisher)
-
-**Quality Metrics**:
-- **Citation Rate** = Total Citations ÷ Total Papers (proxy for Impact Factor)
-- Filters out non-journals (arXiv, Zenodo, conference proceedings)
-- Minimum 500 papers to ensure established journals
-- **Default behavior**: Only shows supported publishers (Elsevier, Springer)
-
-**Note**: Set `supported_only=False` to see all journals, but only Elsevier/Springer can be searched.
-
-#### `search_cfp`
-Search for Call for Papers for a specific journal.
-
-**IMPORTANT**: Use `get_publisher()` first to verify journal and publisher support!
-
-```
-Input:
-- journal_name: Exact name of the journal (use name from get_publisher result)
-- count: Maximum results to return (default: 5)
-
-Output: JSON with CFP entries including title, deadline, URL, description
-
-Supported publishers: Elsevier, Springer only
-```
-
-#### `get_cfp_detail`
-Get detailed information about a specific CFP.
-
-```
-Input:
-- cfp_url: URL of the CFP page
-- journal_name: Optional journal name
-
-Output: JSON with detailed CFP info including guest editors, topics, submission URL
-```
-
-#### `get_publisher`
-Identify the publisher of a journal using OpenAlex API.
-
-**Use this FIRST before calling search_cfp()!**
-
-```
-Input:
-- journal_name: Name of the journal
-
-Output: JSON with publisher info, ISSN, citation statistics, and support status
-  - is_supported: Boolean indicating if Elsevier or Springer
-  - journal_name: Official name to use with search_cfp()
-  
-Only Elsevier and Springer publishers are supported.
-```
-
-#### `list_publishers`
-List supported publishers (Elsevier and Springer only).
-
-```
-Output: JSON with supported publishers and their domains
-
-Note: IEEE and Wiley are not supported due to anti-scraping measures
-```
-
-## Supported Journals
-
-### Springer Nature
-| Journal | CFP URL |
-|---------|---------|
-| Building Simulation | https://link.springer.com/journal/12273/collections?filter=Open |
-| Energy Efficiency | https://link.springer.com/journal/12053/collections?filter=Open |
-| Machine Learning | https://link.springer.com/journal/10994/collections?filter=Open |
-| Neural Computing and Applications | https://link.springer.com/journal/521/collections?filter=Open |
-| Neural Computing and Applications | https://link.springer.com/journal/521/collections?filter=Open |
-| Applied Intelligence | https://link.springer.com/journal/10489/collections?filter=Open |
-
-### Elsevier/ScienceDirect
-Elsevier journals are now fully supported through the unified browse page.
-
-| Journal | CFP URL |
-|---------|---------|
-| Energy and Buildings | https://www.sciencedirect.com/browse/calls-for-papers |
-| Building and Environment | https://www.sciencedirect.com/browse/calls-for-papers |
-| Applied Energy | https://www.sciencedirect.com/browse/calls-for-papers |
-| Information Sciences | https://www.sciencedirect.com/browse/calls-for-papers |
-
-**Note**: All Elsevier journals use the same unified browse page, with automatic filtering by journal name.
-
-## Implementation Details
-
-### Elsevier/ScienceDirect Parser
-
-The Elsevier parser uses a sophisticated two-stage approach:
-
-#### 1. JSON Data Extraction (Primary Method)
-- **Target**: Extracts data from `window.INITIAL_STATE` embedded in the page
-- **Data Structure**: 
-  ```javascript
-  window.INITIAL_STATE = {
-    callsForPapers: {
-      cfpList: [
-        {
-          title: "CFP Title",
-          journal: {
-            displayName: "Journal Name",
-            impactFactor: "7.1",
-            citeScore: "12.6",
-            issn: "03787788"
-          },
-          url: "cfp-url-slug",
-          submissionDeadline: "2026-02-15",
-          summary: "Guest editors: ..."
-        }
-        // ... 2700+ CFPs
-      ]
-    }
-  }
-  ```
-- **Advantages**:
-  - Reliable: Data is pre-rendered by server
-  - Complete: Includes all metadata (journal name, impact factor, deadlines)
-  - Fast: No need to scrape HTML elements
-  - ~2700+ CFPs available across all Elsevier journals
-
-#### 2. HTML Parsing (Fallback)
-- Triggers if JSON extraction fails
-- Scrapes `<li class="publication">` elements
-- Less reliable but provides basic CFP information
-
-#### 3. Client-Side Filtering
-- After extracting all CFPs from browse page, filters by target journal name
-- Uses exact matching and aliases from registry
-- Preserves original journal names for debugging
-
-#### Workflow
-```
-User Query: "Energy and Buildings"
-    ↓
-1. Fetch browse page (https://www.sciencedirect.com/browse/calls-for-papers)
-    ↓
-2. Extract window.INITIAL_STATE JSON (~1.4MB)
-    ↓
-3. Parse cfpList (2700+ CFPs from all journals)
-    ↓
-4. Filter by journal name: "Energy and Buildings"
-    ↓
-5. Return matched CFPs (typically 10-20 per journal)
-```
-
-#### Why This Approach Works
-- **Bypasses Cloudflare**: Direct page fetch works (no JavaScript execution needed)
-- **No Bot Detection**: Server-side rendered JSON is accessible
-- **Scalable**: Single request serves all Elsevier journals
-- **Maintainable**: JSON structure is stable
-
-### Testing
-
-Test scripts are available in `tests/` directory:
-
-- `test_search_local.py`: Interactive testing tool with registry display
-- `test_filter.py`: Tests journal filtering logic
-- `test_parser_output.py`: Analyzes parser extraction results
-- `test_initial_state.py`: Validates JSON extraction from browse page
-- `browse_page.html`: Sample page for offline testing (1.4MB)
-
-Run tests:
-```bash
-cd tests
-python test_search_local.py  # Interactive mode
-python test_filter.py         # Automated filtering test
-```
-
-## Example
-
-### Cross-Journal Keyword Search (Topic-based Discovery)
-
-```python
-import asyncio
-from call4paper.utils.config import Config
-from call4paper.tools.search import search_journal_cfp
-
-async def find_top_journals_by_topic():
-    # Step 1: Find TOP journals by research topic (sorted by quality)
-    journals = await Config.search_journals_by_keyword(
-        keyword="renewable energy",
-        max_results=10,
-        min_works=1000,  # Quality filter
-        mode="topic"  # Search by topic, not just journal name
-    )
-    
-    print(f"Found {len(journals)} top-tier journals\n")
-    
-    # Results are sorted by citation_rate (similar to Impact Factor)
-    for journal in journals[:3]:
-        print(f"• {journal['journal_name']}")
-        print(f"  Citation Rate: {journal['citation_rate']:.1f}")
-        print(f"  Papers on this topic: {journal['topic_papers_count']:,}")
-        print(f"  Publisher: {journal['publisher_raw']}\n")
-    
-    # Step 2: Check publisher support and search CFPs for top journals
-    for journal in journals[:3]:
-        journal_name = journal['journal_name']
-        
-        # Verify publisher support
-        publisher_info = await Config.get_publisher_from_openalex(journal_name)
-        if not publisher_info:
-            print(f"\nSkipping {journal_name}: Not found in OpenAlex")
-            continue
-            
-        normalized_publisher = publisher_info.get('publisher', 'unknown')
-        if normalized_publisher not in ['elsevier', 'springer']:
-            print(f"\nSkipping {journal_name}: Publisher {publisher_info.get('publisher_raw')} not supported")
-            continue
-        
-        print(f"\nSearching CFPs for: {journal_name} ({publisher_info.get('publisher_raw')})")
-        
-        cfp_list = await search_journal_cfp(journal_name, count=5)
-        for cfp in cfp_list.items:
-            print(f"  - {cfp.title}")
-            print(f"    Deadline: {cfp.deadline}")
-
-asyncio.run(find_top_journals_by_topic())
-```
-
-**Key Features**:
-- 🎯 **Topic-based search**: Finds journals that publish papers on specific topics
-- 📊 **Quality ranking**: Results sorted by citation rate (citations per paper)
-- 🚫 **Filters non-journals**: Excludes arXiv, bioRxiv, and other preprint servers
-- ⭐ **Top-tier focus**: Only includes established journals (500+ papers minimum)
-
-### Direct Journal Search
-
-```python
-import asyncio
-from call4paper.tools.search import search_journal_cfp
-
-async def main():
-    # Search for CFPs in a specific journal
-    result = await search_journal_cfp("Building Simulation", count=3)
-    print(f"Found {result.total_count} CFPs")
-    for cfp in result.items:
-        print(f"- {cfp.title}")
-        print(f"  Deadline: {cfp.deadline}")
-        print(f"  URL: {cfp.url}")
-
-asyncio.run(main())
-```
-
-## Project Structure
-
-```
-call4paper/
-├── src/call4paper/
-│   ├── server.py           # MCP server entry point
-│   ├── tools/              # Search and scraping tools
-│   ├── parsers/            # Publisher-specific parsers
-│   ├── models/             # Data models (Pydantic)
-│   └── utils/              # Cache and config utilities
-├── data/
-│   └── journal_registry.json   # Pre-configured journal URLs
-└── tests/
-```
-
-## Adding New Journals
-
-Edit `data/journal_registry.json` to add new journal mappings:
-
-```json
-{
-  "name": "Journal Name",
-  "aliases": ["alias1", "alias2"],
-  "publisher": "springer",
-  "cfp_url": "https://link.springer.com/journal/{id}/collections?filter=Open",
-  "journal_id": "12345"
-}
-```
-
-## Development
+Claude Code (CLI add command):
 
 ```bash
-# Install dev dependencies
-uv sync --extra browser
-
-# Run tests
-uv run pytest
-
-# Run server directly
-uv run call4paper
+claude mcp add --transport stdio call4paper -- call4paper serve
 ```
 
-## Known Limitations
+Codex (config.toml):
 
-1. **Publisher Support**: Only Elsevier and Springer journals are supported. IEEE and Wiley have anti-scraping measures and lack centralized CFP search hubs.
+```toml
+[mcp_servers.call4paper]
+command = "call4paper"
+args = ["serve"]
+```
 
-2. **Elsevier Journal Name Matching**: Some CFPs may have journal names listed as "Test" if not properly extracted from HTML fallback. JSON extraction method resolves this issue.
+Codex (CLI add command):
 
-3. **Guest Editor Extraction**: May include false positives in some cases. Guest editors are extracted from summary field when available.
+```bash
+codex mcp add call4paper -- call4paper serve
+```
 
-4. **Deadline Parsing**: Handles ISO format dates (YYYY-MM-DD) from Elsevier JSON. Other formats may require additional parsing logic.
+Where to place these:
 
-> **Local Execution Only**  
-> This MCP server runs **locally on your machine**. There is no centralized API or server.  
-> All requests are made directly from your computer to journal websites (Elsevier, Springer, etc.).  
-> Your data and search history stay on your local machine.
+- Claude Desktop: Settings -> Developer -> Edit Config, then add under `mcpServers`.
+- Claude Code: the CLI add command writes to your MCP config (use the scope flag to choose user/project/local).
+- Codex: edit `~/.codex/config.toml` or project `.codex/config.toml`.
+
+## Usage
+
+Example prompts:
+
+> Search CFPs for "Nature Energy" (this year only). Include deadlines and URLs.
+
+> Find journals related to "battery recycling", then search CFPs for the top 3.
+
+> Use keyword search for "microgrids", then fetch CFPs for any supported journals you find.
+
+## Available Tools
+
+- `search_cfp`: Find CFPs for a specific journal.
+- `search_journals_by_keyword`: Discover journals by topic/keyword before searching CFPs.
+- `get_publisher`: Identify a journal's publisher and support status.
+- `get_cfp_detail`: Fetch full details for a specific CFP URL.
+- `list_publishers`: Show supported publishers and domains.
 
 ## License
 

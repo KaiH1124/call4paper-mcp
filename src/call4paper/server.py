@@ -14,7 +14,7 @@ mcp = FastMCP("call4paper")
 
 
 @mcp.tool()
-async def search_cfp(journal_name: str, count: int = 5) -> str:
+async def search_cfp(journal_name: str, count: int = 5, enrich_details: bool = False) -> str:
     """Search for Call for Papers (Special Issues) for an academic journal.
 
     IMPORTANT: Use get_publisher() first to verify journal name and publisher support!
@@ -30,6 +30,7 @@ async def search_cfp(journal_name: str, count: int = 5) -> str:
         journal_name: Exact name of the journal (e.g., "Energy and Buildings",
                      "Information Sciences", "Applied Energy")
         count: Maximum number of CFP entries to return (default: 5)
+        enrich_details: Fetch each detail page to fill accurate deadlines (default: False)
 
     Returns:
         JSON string containing CFP information including:
@@ -53,7 +54,11 @@ async def search_cfp(journal_name: str, count: int = 5) -> str:
                     "message": f"This journal is published by {publisher_info.get('publisher_raw', 'an unsupported publisher')}. Only Elsevier and Springer journals are currently supported due to anti-scraping measures on other publishers."
                 }, indent=2)
         
-        cfp_list = await search_journal_cfp(journal_name, count=count)
+        cfp_list = await search_journal_cfp(
+            journal_name,
+            count=count,
+            enrich_details=enrich_details,
+        )
         return cfp_list.model_dump_json(indent=2)
     except Exception as e:
         return json.dumps({
@@ -110,8 +115,8 @@ async def get_cfp_detail(cfp_url: str, journal_name: str = "") -> str:
 def list_publishers() -> str:
     """List all supported academic publishers.
 
-    Currently only Elsevier and Springer are supported due to anti-scraping
-    measures on IEEE and Wiley websites that lack centralized search hubs.
+    Currently Elsevier, Springer, and Nature Collections are supported due to
+    anti-scraping measures on IEEE and Wiley websites that lack centralized search hubs.
 
     Returns:
         JSON string containing list of supported publishers with their domains:
@@ -122,7 +127,7 @@ def list_publishers() -> str:
     return json.dumps({
         "supported_publishers": publishers,
         "total": len(publishers),
-        "note": "Only Elsevier and Springer are supported. IEEE and Wiley have anti-scraping measures without centralized CFP hubs.",
+        "note": "Only Elsevier, Springer, and Nature Collections are supported. IEEE and Wiley have anti-scraping measures without centralized CFP hubs.",
         "workflow": "Use get_publisher() to check if a journal is supported before calling search_cfp()."
     }, indent=2)
 

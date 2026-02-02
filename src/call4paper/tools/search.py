@@ -7,6 +7,7 @@ from ..models.cfp import CallForPaper, CFPList
 from ..parsers import (
     BaseParser,
     ElsevierParser,
+    NatureParser,
     SpringerParser,
     IEEEParser,
     WileyParser,
@@ -20,6 +21,7 @@ from .scraper import fetch_page, fetch_page_with_curl, fetch_page_dynamic, is_pl
 # Parser registry in order of priority
 PARSER_CLASSES: list[type[BaseParser]] = [
     ElsevierParser,
+    NatureParser,
     SpringerParser,
     IEEEParser,
     WileyParser,
@@ -55,6 +57,7 @@ async def search_journal_cfp(
     journal_name: str,
     count: int = 5,
     use_cache: bool = True,
+    enrich_details: bool = False,
 ) -> CFPList:
     """Search for Call for Papers for a given journal.
 
@@ -69,15 +72,6 @@ async def search_journal_cfp(
     Returns:
         CFPList containing found CFP entries
     """
-    # Check cache first
-    cache_key = f"cfp_list:{journal_name.lower()}"
-    if use_cache:
-        cached = _cache.get(cache_key)
-        if cached:
-            cfp_list = CFPList(**cached)
-            cfp_list.items = cfp_list.items[:count]
-            return cfp_list
-
     # Use ScienceDirect's unified browse page for Elsevier journals
     # This approach avoids 404s and allows filtering by journal name
     cfp_url = "https://www.sciencedirect.com/browse/calls-for-papers"
@@ -101,14 +95,19 @@ async def search_journal_cfp(
 
             # Update publisher and CFP URL based on detected publisher
             if detected_publisher == "springer":
-                publisher = "Springer"
-                # Try to construct specific journal URL using journal ID
-                springer_journal_id = openalex_info.get("springer_journal_id")
-                if springer_journal_id:
-                    cfp_url = f"https://link.springer.com/journal/{springer_journal_id}/collections?filter=Open"
+                nature_short_name = openalex_info.get("nature_short_name")
+                if nature_short_name:
+                    publisher = "Nature"
+                    cfp_url = f"https://www.nature.com/{nature_short_name}/collections"
                 else:
-                    # Fallback to generic search page
-                    cfp_url = "https://link.springer.com/search?facet-content-type=%22Collection%22&facet-discipline=%22Computer+Science%22"
+                    publisher = "Springer"
+                    # Try to construct specific journal URL using journal ID
+                    springer_journal_id = openalex_info.get("springer_journal_id")
+                    if springer_journal_id:
+                        cfp_url = f"https://link.springer.com/journal/{springer_journal_id}/collections?filter=Open"
+                    else:
+                        # Fallback to generic search page
+                        cfp_url = "https://link.springer.com/search?facet-content-type=%22Collection%22&facet-discipline=%22Computer+Science%22"
             elif detected_publisher == "wiley":
                 publisher = "Wiley"
                 # Use generic Wiley special issues page if available
@@ -123,6 +122,17 @@ async def search_journal_cfp(
                 # Unknown publisher, keep default Elsevier browse page
                 # It will likely return no results, but that's expected
                 pass
+
+    effective_enrich_details = enrich_details or _requires_detail_enrichment(publisher, cfp_url)
+
+    # Check cache after determining whether detail enrichment is required
+    cache_key = f"cfp_list:{journal_name.lower()}|enrich:{effective_enrich_details}"
+    if use_cache:
+        cached = _cache.get(cache_key)
+        if cached:
+            cfp_list = CFPList(**cached)
+            cfp_list.items = cfp_list.items[:count]
+            return cfp_list
 
     # Fetch the page - try multiple methods
     html, error = await fetch_page(cfp_url)
@@ -198,6 +208,10 @@ async def search_journal_cfp(
     # Sort by deadline
     cfp_list.sort_by_deadline()
 
+    if effective_enrich_details and cfp_list.items:
+        await enrich_cfp_list(cfp_list, journal_name)
+        cfp_list.sort_by_deadline()
+
     # Cache the results
     if use_cache and cfp_list.items:
         _cache.set(cache_key, cfp_list.model_dump())
@@ -206,6 +220,38 @@ async def search_journal_cfp(
     cfp_list.items = cfp_list.items[:count]
 
     return cfp_list
+
+
+def _requires_detail_enrichment(publisher: str, cfp_url: str) -> bool:
+    """Return True when deadlines must be read from detail pages."""
+    if publisher.lower() == "nature":
+        return True
+    if "nature.com" in cfp_url and "/collections" in cfp_url:
+        return True
+    return False
+
+
+async def enrich_cfp_list(cfp_list: CFPList, journal_name: str = "") -> None:
+    """Enrich list items by fetching detail pages for more accurate metadata."""
+    for item in cfp_list.items:
+        try:
+            detail = await get_cfp_details(item.url, journal_name or cfp_list.journal_name)
+        except BotProtectionError:
+            detail = None
+        if not detail:
+            continue
+        if detail.deadline:
+            item.deadline = detail.deadline
+        if detail.guest_editors:
+            item.guest_editors = detail.guest_editors
+        if detail.topics:
+            item.topics = detail.topics
+        if detail.description:
+            item.description = detail.description
+        if detail.submission_url:
+            item.submission_url = detail.submission_url
+        if detail.accessibility and detail.accessibility != "unknown":
+            item.accessibility = detail.accessibility
 
 
 async def get_cfp_details(cfp_url: str, journal_name: str = "") -> Optional[CallForPaper]:
@@ -343,7 +389,7 @@ def list_supported_publishers() -> list[dict]:
         List of publisher information dicts
     """
     # Only support publishers with reliable CFP access
-    supported_parsers = [ElsevierParser, SpringerParser]
+    supported_parsers = [ElsevierParser, SpringerParser, NatureParser]
     publishers = []
 
     for parser_class in supported_parsers:

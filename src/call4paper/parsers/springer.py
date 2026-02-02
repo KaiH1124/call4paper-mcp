@@ -17,7 +17,7 @@ class SpringerParser(BaseParser):
     """
 
     publisher_name = "Springer"
-    supported_domains = ["springer.com", "springerlink.com", "link.springer.com", "nature.com"]
+    supported_domains = ["springer.com", "springerlink.com", "link.springer.com"]
 
     def parse_cfp_list(self, html: str, url: str) -> CFPList:
         """Parse Springer journal collections/CFP listing page."""
