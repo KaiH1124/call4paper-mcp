@@ -51,7 +51,8 @@ async def search_cfp(journal_name: str, count: int = 5, enrich_details: bool = F
                     "journal_name": publisher_info.get("journal_name", journal_name),
                     "publisher": publisher_info.get("publisher_raw", "Unknown"),
                     "supported_publishers": ["Elsevier", "Springer"],
-                    "message": f"This journal is published by {publisher_info.get('publisher_raw', 'an unsupported publisher')}. Only Elsevier and Springer journals are currently supported due to anti-scraping measures on other publishers."
+                    "message": f"This journal is published by {publisher_info.get('publisher_raw', 'an unsupported publisher')}. Only Elsevier and Springer journals are currently supported due to anti-scraping measures on other publishers.",
+                    "llm_instruction": "Fallback to native web search for CFPs on the journal's official site and publisher pages."
                 }, indent=2)
         
         cfp_list = await search_journal_cfp(
@@ -171,6 +172,7 @@ async def get_publisher(journal_name: str) -> str:
             info["supported_publishers"] = ["Elsevier", "Springer"]
             if not is_supported:
                 info["note"] = f"This journal's publisher ({info.get('publisher_raw', 'Unknown')}) is not supported. Only Elsevier and Springer journals can be searched for CFPs."
+                info["llm_instruction"] = "Fallback to native web search for CFPs on the journal's official site and publisher pages."
             return json.dumps(info, indent=2)
         return json.dumps({
             "error": "Journal not found",
